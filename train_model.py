@@ -12,7 +12,7 @@ def download_dataset_if_needed():
         print("📦 Скачиваем датасет с Kaggle...")
         os.system("mkdir -p ~/.kaggle")
         if not os.path.exists("kaggle.json"):
-            raise FileNotFoundError("❌ Файл kaggle.json не найден! Скачайте его с https://www.kaggle.com/account и положите в корень проекта.")
+            raise FileNotFoundError("❌ Файл kaggle.json не найден! Скачайте его с https://www.kaggle.com/settings и положите в корень проекта.")
         os.system("cp kaggle.json ~/.kaggle/kaggle.json")
         os.system("chmod 600 ~/.kaggle/kaggle.json")
         os.system("kaggle datasets download -d kmader/malaria-bounding-boxes")
