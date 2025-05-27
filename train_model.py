@@ -1,5 +1,3 @@
-# 🔧 Убедитесь, что у вас есть kaggle.json в корне проекта
-
 import os
 import json
 from tqdm import tqdm
@@ -8,6 +6,24 @@ from detectron2.data import MetadataCatalog, DatasetCatalog
 from detectron2.engine import DefaultTrainer
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
+
+def download_dataset_if_needed():
+    if not os.path.exists("malaria-bounding-boxes.zip"):
+        print("📦 Скачиваем датасет с Kaggle...")
+        os.system("mkdir -p ~/.kaggle")
+        if not os.path.exists("kaggle.json"):
+            raise FileNotFoundError("❌ Файл kaggle.json не найден! Скачайте его с https://www.kaggle.com/account и положите в корень проекта.")
+        os.system("cp kaggle.json ~/.kaggle/kaggle.json")
+        os.system("chmod 600 ~/.kaggle/kaggle.json")
+        os.system("kaggle datasets download -d kmader/malaria-bounding-boxes")
+    else:
+        print("✅ Датасет уже загружен.")
+
+    if not os.path.exists("malaria"):
+        print("📂 Распаковываем архив...")
+        os.system("unzip -qo malaria-bounding-boxes.zip -d malaria")
+    else:
+        print("✅ Архив уже распакован.")
 
 def convert_to_coco(source_path, image_dir, output_path):
     with open(source_path, 'r') as f:
@@ -74,6 +90,8 @@ def convert_to_coco(source_path, image_dir, output_path):
     print(f"✅ Сохранено: {output_path}")
 
 def train():
+    download_dataset_if_needed()
+
     base_path = "malaria/malaria"
     image_dir = os.path.join(base_path, "images")
     train_json = os.path.join(base_path, "malaria", "training.json")
@@ -93,7 +111,7 @@ def train():
 
     cfg = get_cfg()
     cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
-    cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    cfg.MODEL.DEVICE = "cuda" if os.environ.get("USE_CUDA", "1") == "1" else "cpu"
     cfg.DATASETS.TRAIN = ("malaria_train",)
     cfg.DATASETS.TEST = ("malaria_test",)
     cfg.DATALOADER.NUM_WORKERS = 2
