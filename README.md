@@ -13,7 +13,7 @@
 3. Загрузите свой `kaggle.json`, как описано ниже
 
 ## 📥 Подготовка Kaggle API
-1. Перейдите в [https://www.kaggle.com/account](https://www.kaggle.com/account)
+1. Перейдите в [https://www.kaggle.com/settings](https://www.kaggle.com/settings)
 2. Найдите раздел **API** и нажмите **Create New API Token**
 3. Скачайте `kaggle.json`
 4. В Google Colab загрузите его:
