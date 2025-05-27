@@ -1,23 +1,41 @@
 import os
 import json
+import shutil
+from pathlib import Path
 from tqdm import tqdm
+
 from detectron2.data.datasets import register_coco_instances
 from detectron2.data import MetadataCatalog, DatasetCatalog
-from detectron2.engine import DefaultTrainer
+from detectron2.engine import DefaultTrainer, DefaultPredictor
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
+from detectron2.evaluation import COCOEvaluator, inference_on_dataset
+from detectron2.data import build_detection_test_loader
+from detectron2.utils.visualizer import Visualizer
+import cv2
+import matplotlib.pyplot as plt
+import random
 
+# ✅ Настройка Kaggle API (кросс-платформенно)
+def setup_kaggle():
+    kaggle_json = Path("kaggle.json")
+    if not kaggle_json.exists():
+        raise FileNotFoundError("❌ Файл kaggle.json не найден! Скачайте его с https://www.kaggle.com/account и поместите в корень проекта.")
+    
+    kaggle_dir = Path.home() / ".kaggle"
+    kaggle_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(str(kaggle_json), str(kaggle_dir / "kaggle.json"))
+    os.environ["KAGGLE_CONFIG_DIR"] = str(kaggle_dir)
+    print("✅ Kaggle API настроен.")
+
+# 📥 Загрузка датасета
 def download_dataset_if_needed():
     if not os.path.exists("malaria-bounding-boxes.zip"):
         print("📦 Скачиваем датасет с Kaggle...")
-        os.system("mkdir -p ~/.kaggle")
-        if not os.path.exists("kaggle.json"):
-            raise FileNotFoundError("❌ Файл kaggle.json не найден! Скачайте его с https://www.kaggle.com/settings и положите в корень проекта.")
-        os.system("cp kaggle.json ~/.kaggle/kaggle.json")
-        os.system("chmod 600 ~/.kaggle/kaggle.json")
+        setup_kaggle()
         os.system("kaggle datasets download -d kmader/malaria-bounding-boxes")
     else:
-        print("✅ Датасет уже загружен.")
+        print("✅ Архив с датасетом уже скачан.")
 
     if not os.path.exists("malaria"):
         print("📂 Распаковываем архив...")
@@ -25,6 +43,7 @@ def download_dataset_if_needed():
     else:
         print("✅ Архив уже распакован.")
 
+# 🔄 Конвертация аннотаций в формат COCO
 def convert_to_coco(source_path, image_dir, output_path):
     with open(source_path, 'r') as f:
         raw_data = json.load(f)
@@ -87,8 +106,56 @@ def convert_to_coco(source_path, image_dir, output_path):
     with open(output_path, "w") as f:
         json.dump(coco_format, f, indent=4)
 
-    print(f"✅ Сохранено: {output_path}")
+    print(f"✅ COCO файл сохранён: {output_path}")
 
+# 📊 Оценка модели
+def evaluate_model(cfg):
+    print("\n📊 Оценка модели на тестовом наборе...")
+    evaluator = COCOEvaluator("malaria_test", cfg, False, output_dir="./output_malaria")
+    val_loader = build_detection_test_loader(cfg, "malaria_test")
+    model = DefaultPredictor(cfg).model
+    results = inference_on_dataset(model, val_loader, evaluator)
+    print("✅ Метрики:")
+    print(results)
+
+# 🖼️ Визуализация случайного изображения
+def visualize_random_prediction(cfg):
+    print("\n🎯 Визуализация случайного изображения:")
+    predictor = DefaultPredictor(cfg)
+    val_loader = build_detection_test_loader(cfg, "malaria_test")
+    dataset = val_loader.dataset
+
+    sample = random.choice(dataset)
+    img_path = sample["file_name"]
+    image = cv2.imread(img_path)
+    outputs = predictor(image)
+
+    v = Visualizer(image[:, :, ::-1], MetadataCatalog.get("malaria_test"), scale=1.2)
+    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+
+    plt.figure(figsize=(12, 12))
+    plt.imshow(out.get_image())
+    plt.axis("off")
+    plt.title(os.path.basename(img_path))
+    plt.show()
+
+# 🖼️ Визуализация по конкретному пути
+def visualize_specific_image(cfg, path):
+    print(f"🎯 Визуализация конкретного изображения: {path}")
+    predictor = DefaultPredictor(cfg)
+    image = cv2.imread(path)
+    outputs = predictor(image)
+
+    v = Visualizer(image[:, :, ::-1], MetadataCatalog.get("malaria_test"), scale=1.2)
+    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+
+    plt.figure(figsize=(12, 12))
+    plt.imshow(out.get_image())
+    plt.axis("off")
+    plt.title(os.path.basename(path))
+    plt.show()
+
+# 🚀 Основной процесс обучения
 def train():
     download_dataset_if_needed()
 
@@ -131,58 +198,7 @@ def train():
 
     evaluate_model(cfg)
     visualize_random_prediction(cfg)
-    # visualize_specific_image(cfg, "malaria/malaria/images/<your-image-name>.png")  # Раскомментируй при необходимости
+    # visualize_specific_image(cfg, "malaria/malaria/images/your_image.png")  # Раскомментируй при необходимости
 
 if __name__ == "__main__":
     train()
-
-from detectron2.engine import DefaultPredictor
-from detectron2.evaluation import COCOEvaluator, inference_on_dataset
-from detectron2.data import build_detection_test_loader
-from detectron2.utils.visualizer import Visualizer
-import cv2
-import matplotlib.pyplot as plt
-import random
-
-def evaluate_model(cfg):
-    print("\n📊 Оценка модели на тестовом наборе...")
-    evaluator = COCOEvaluator("malaria_test", cfg, False, output_dir="./output_malaria")
-    val_loader = build_detection_test_loader(cfg, "malaria_test")
-    model = DefaultPredictor(cfg).model
-    results = inference_on_dataset(model, val_loader, evaluator)
-    print("✅ Метрики:")
-    print(results)
-
-def visualize_random_prediction(cfg):
-    print("\n🎯 Визуализация случайного изображения:")
-    predictor = DefaultPredictor(cfg)
-    val_loader = build_detection_test_loader(cfg, "malaria_test")
-    dataset = val_loader.dataset
-    sample = random.choice(dataset)
-    img_path = sample["file_name"]
-    image = cv2.imread(img_path)
-    outputs = predictor(image)
-
-    v = Visualizer(image[:, :, ::-1], MetadataCatalog.get("malaria_test"), scale=1.2)
-    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-
-    plt.figure(figsize=(12, 12))
-    plt.imshow(out.get_image())
-    plt.axis("off")
-    plt.title(os.path.basename(img_path))
-    plt.show()
-
-def visualize_specific_image(cfg, path):
-    print(f"🎯 Визуализация конкретного изображения: {path}")
-    predictor = DefaultPredictor(cfg)
-    image = cv2.imread(path)
-    outputs = predictor(image)
-
-    v = Visualizer(image[:, :, ::-1], MetadataCatalog.get("malaria_test"), scale=1.2)
-    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-
-    plt.figure(figsize=(12, 12))
-    plt.imshow(out.get_image())
-    plt.axis("off")
-    plt.title(os.path.basename(path))
-    plt.show()
