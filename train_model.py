@@ -129,5 +129,60 @@ def train():
     trainer.resume_or_load(resume=False)
     trainer.train()
 
+    evaluate_model(cfg)
+    visualize_random_prediction(cfg)
+    # visualize_specific_image(cfg, "malaria/malaria/images/<your-image-name>.png")  # Раскомментируй при необходимости
+
 if __name__ == "__main__":
     train()
+
+from detectron2.engine import DefaultPredictor
+from detectron2.evaluation import COCOEvaluator, inference_on_dataset
+from detectron2.data import build_detection_test_loader
+from detectron2.utils.visualizer import Visualizer
+import cv2
+import matplotlib.pyplot as plt
+import random
+
+def evaluate_model(cfg):
+    print("\n📊 Оценка модели на тестовом наборе...")
+    evaluator = COCOEvaluator("malaria_test", cfg, False, output_dir="./output_malaria")
+    val_loader = build_detection_test_loader(cfg, "malaria_test")
+    model = DefaultPredictor(cfg).model
+    results = inference_on_dataset(model, val_loader, evaluator)
+    print("✅ Метрики:")
+    print(results)
+
+def visualize_random_prediction(cfg):
+    print("\n🎯 Визуализация случайного изображения:")
+    predictor = DefaultPredictor(cfg)
+    val_loader = build_detection_test_loader(cfg, "malaria_test")
+    dataset = val_loader.dataset
+    sample = random.choice(dataset)
+    img_path = sample["file_name"]
+    image = cv2.imread(img_path)
+    outputs = predictor(image)
+
+    v = Visualizer(image[:, :, ::-1], MetadataCatalog.get("malaria_test"), scale=1.2)
+    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+
+    plt.figure(figsize=(12, 12))
+    plt.imshow(out.get_image())
+    plt.axis("off")
+    plt.title(os.path.basename(img_path))
+    plt.show()
+
+def visualize_specific_image(cfg, path):
+    print(f"🎯 Визуализация конкретного изображения: {path}")
+    predictor = DefaultPredictor(cfg)
+    image = cv2.imread(path)
+    outputs = predictor(image)
+
+    v = Visualizer(image[:, :, ::-1], MetadataCatalog.get("malaria_test"), scale=1.2)
+    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+
+    plt.figure(figsize=(12, 12))
+    plt.imshow(out.get_image())
+    plt.axis("off")
+    plt.title(os.path.basename(path))
+    plt.show()
